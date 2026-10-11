@@ -5,7 +5,7 @@ if __name__ == '__main__':
     with Session() as session:
         print(f'Total de clientes: {session.query(Cliente).count()}')
         print(f'Total de reparos: {session.query(Reparo).count()}')
-        print('\nPrimeiros 5 reparos (com o nome do cliente):')
+        print('\nLista de reparos:')
         reparos = session.query(Reparo).order_by(Reparo.reparo_id).limit(5).all()
         for reparo in reparos:
             print(
