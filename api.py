@@ -4,18 +4,16 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func
 from sqlalchemy.orm import Session as OrmSession
 
-from model import Cliente, Reparo
-from model import Session as SessionLocal
+import model
 
 app = FastAPI(title='API da Assistência Técnica')
 
 
 def get_session():
     """Abre uma sessão por requisição e a fecha no final."""
-    with SessionLocal() as session:
+    with model.Session() as session:
         yield session
 
 
@@ -46,12 +44,12 @@ class ReparoOut(BaseModel):
 
 @app.get('/reparos', response_model=list[ReparoOut])
 def listar_reparos(session: OrmSession = Depends(get_session)):
-    return session.query(Reparo).order_by(Reparo.reparo_id).all()
+    return model.listar_reparos(session)
 
 
 @app.get('/reparos/{reparo_id}', response_model=ReparoOut)
 def buscar_reparo(reparo_id: int, session: OrmSession = Depends(get_session)):
-    reparo = session.get(Reparo, reparo_id)
+    reparo = model.buscar_reparo(session, reparo_id)
     if reparo is None:
         raise HTTPException(status_code=404, detail='Reparo não encontrado')
     return reparo
@@ -59,27 +57,12 @@ def buscar_reparo(reparo_id: int, session: OrmSession = Depends(get_session)):
 
 @app.post('/reparos', response_model=ReparoOut, status_code=201)
 def cadastrar_reparo(dados: ReparoIn, session: OrmSession = Depends(get_session)):
-    # Só confere se a referência existe, para devolver 422 em vez de um erro 500 do banco.
-    if session.get(Cliente, dados.cliente_id) is None:
+    reparo = model.cadastrar_reparo(session, dados.model_dump())
+    if reparo is None:
         raise HTTPException(status_code=422, detail='cliente_id não existe')
-    reparo = Reparo(**dados.model_dump())
-    session.add(reparo)
-    session.commit()
-    session.refresh(reparo)
     return reparo
 
 
 @app.get('/resumo')
 def resumo(session: OrmSession = Depends(get_session)):
-    total, soma, media = session.query(
-        func.count(Reparo.reparo_id), func.sum(Reparo.valor), func.avg(Reparo.valor)
-    ).one()
-    por_status = dict(
-        session.query(Reparo.status, func.count(Reparo.reparo_id)).group_by(Reparo.status).all()
-    )
-    return {
-        'total_reparos': total,
-        'valor_total': round(float(soma or 0), 2),
-        'valor_medio': round(float(media or 0), 2),
-        'por_status': por_status,
-    }
+    return model.resumir_reparos(session)
